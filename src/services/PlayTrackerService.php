@@ -72,6 +72,80 @@ class PlayTrackerService extends Component
     }
 
     /**
+     * Mark an entire course as completed for a user
+     */
+    public function markCourseComplete(int $entryId, int $userId): bool
+    {
+        $db = Craft::$app->getDb();
+
+        try {
+            $transaction = $db->beginTransaction();
+
+            // Get the course entry
+            $courseEntry = Entry::find()->section('courses')->id($entryId)->one();
+
+            if (!$courseEntry) {
+                throw new \Exception('Course not found');
+            }
+
+            // Get all videos in this course
+            $courseVideos = $courseEntry->courseVideos->all();
+
+            foreach ($courseVideos as $video) {
+                $videoRowId = $video->id;
+
+                // Check if record exists
+                $existingRecord = (new Query())
+                    ->select(['id', 'status'])
+                    ->from(['{{%playtracker_playtrackerrecord}}'])
+                    ->where([
+                        'entryId' => $entryId,
+                        'userId' => $userId,
+                        'rowId' => $videoRowId
+                    ])
+                    ->one();
+
+                if ($existingRecord) {
+                    // Update to completed
+                    $db->createCommand()
+                        ->update('{{%playtracker_playtrackerrecord}}', [
+                            'status' => 1,
+                            'currentTimestamp' => ''
+                        ], [
+                            'id' => $existingRecord['id']
+                        ])
+                        ->execute();
+                } else {
+                    // Create new completion record
+                    $saveData = [
+                        'userId' => $userId,
+                        'entryId' => $entryId,
+                        'rowId' => $videoRowId,
+                        'status' => 1,
+                        'siteId' => $courseEntry->siteId,
+                        'currentTimestamp' => '',
+                        'courseUrlTitle' => $courseEntry->slug
+                    ];
+
+                    $db->createCommand()
+                        ->insert('{{%playtracker_playtrackerrecord}}', $saveData)
+                        ->execute();
+                }
+            }
+
+            $transaction->commit();
+            return true;
+
+        } catch (\Exception $e) {
+            if (isset($transaction)) {
+                $transaction->rollBack();
+            }
+            Craft::error('Failed to mark course complete: ' . $e->getMessage(), __METHOD__);
+            return false;
+        }
+    }
+
+    /**
      * @param $entryId
      * @return array
      */

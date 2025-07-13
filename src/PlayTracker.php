@@ -1,6 +1,6 @@
 <?php
 /**
- * Play Tracker plugin for Craft CMS 4.x
+ * Play Tracker plugin for Craft CMS 5.x
  *
  * Tracks plays of videos.
  *
